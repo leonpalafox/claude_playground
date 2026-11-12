@@ -290,9 +290,9 @@ AX_RECT = [0.04, 0.335, 0.92, 0.445]
 ASPECT = AX_RECT[2] * FIG_W / (AX_RECT[3] * FIG_H)   # ancho/alto del panel
 centers, half_h = [], []
 for Y in layouts_s:
-    lo, hi = np.percentile(Y, [0.5, 99.5], axis=0)
+    lo, hi = np.percentile(Y, [1, 99], axis=0)
     c = (lo + hi) / 2
-    h = max((hi[1] - lo[1]) / 2, (hi[0] - lo[0]) / 2 / ASPECT) * 1.12
+    h = max((hi[1] - lo[1]) / 2, (hi[0] - lo[0]) / 2 / ASPECT) * 1.28
     centers.append(c); half_h.append(h)
 centers = gaussian_filter1d(np.array(centers), sigma=2.0, axis=0, mode="nearest")
 half_h = gaussian_filter1d(np.array(half_h), sigma=2.0, mode="nearest")
@@ -337,7 +337,7 @@ scat = ax.scatter(layouts[0][:, 0], layouts[0][:, 1], c=point_colors,
 
 halo = [pe.withStroke(linewidth=5, foreground=SURFACE)]
 class_texts = [ax.text(0, 0, n, fontsize=17, weight="bold", color=INK,
-                       ha="center", va="bottom", path_effects=halo)
+                       ha="center", va="bottom", path_effects=halo, clip_on=True)
                for n in class_names]
 
 # Estado y progreso
