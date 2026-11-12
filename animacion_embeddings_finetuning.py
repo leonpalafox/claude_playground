@@ -284,7 +284,10 @@ def frame_to_u(f):
 
 # Encuadre que sigue a los puntos: a medida que los clusters se compactan la
 # cámara se acerca suavemente (misma escala en x e y para no deformar).
-ASPECT = 0.56 * 12.8 / (0.80 * 7.2)   # ancho/alto del panel en pantalla
+# Formato vertical 9:16 (1080x1920) para redes sociales
+FIG_W, FIG_H = 7.2, 12.8
+AX_RECT = [0.04, 0.335, 0.92, 0.445]
+ASPECT = AX_RECT[2] * FIG_W / (AX_RECT[3] * FIG_H)   # ancho/alto del panel
 centers, half_h = [], []
 for Y in layouts_s:
     lo, hi = np.percentile(Y, [0.5, 99.5], axis=0)
@@ -316,48 +319,47 @@ plt.rcParams.update({
     "axes.edgecolor": GRID,
 })
 
-fig = plt.figure(figsize=(12.8, 7.2), dpi=150, facecolor=SURFACE)
-ax = fig.add_axes([0.03, 0.05, 0.56, 0.80])
+fig = plt.figure(figsize=(FIG_W, FIG_H), dpi=150, facecolor=SURFACE)
+ax = fig.add_axes(AX_RECT)
 ax.set_facecolor(SURFACE)
 ax.set_xticks([]); ax.set_yticks([])
 for s in ax.spines.values():
     s.set_visible(False)
 
-fig.text(0.03, 0.935, "Fine-tuning de ResNet-18 en CIFAR-10",
-         fontsize=19, weight="bold", color=INK)
-fig.text(0.03, 0.895, f"Embeddings de {NUM_UMAP_SAMPLES} imágenes de prueba (512-D) proyectados con UMAP",
-         fontsize=11.5, color=INK2)
+LX = 0.06
+fig.text(LX, 0.965, "Fine-tuning de ResNet-18\nen CIFAR-10", fontsize=30,
+         weight="bold", color=INK, va="top", linespacing=1.1)
+fig.text(LX, 0.872, "Cómo se separan las clases en el espacio\nde embeddings (UMAP, 1200 imágenes)",
+         fontsize=16, color=INK2, va="top", linespacing=1.25)
 
 scat = ax.scatter(layouts[0][:, 0], layouts[0][:, 1], c=point_colors,
-                  s=9, alpha=0.78, linewidths=0)
+                  s=16, alpha=0.8, linewidths=0)
 
-halo = [pe.withStroke(linewidth=3.5, foreground=SURFACE)]
-class_texts = [ax.text(0, 0, n, fontsize=11, weight="bold", color=INK,
+halo = [pe.withStroke(linewidth=5, foreground=SURFACE)]
+class_texts = [ax.text(0, 0, n, fontsize=17, weight="bold", color=INK,
                        ha="center", va="bottom", path_effects=halo)
                for n in class_names]
 
-# Columna derecha: estado, leyenda, curvas
-RX = 0.64
-status_main = fig.text(RX, 0.80, "", fontsize=15, weight="bold", color=INK)
-status_sub = fig.text(RX, 0.765, "", fontsize=11, color=INK2)
+# Estado y progreso
+status_main = fig.text(LX, 0.792, "", fontsize=23, weight="bold", color=INK)
+status_sub = fig.text(0.94, 0.792, "", fontsize=23, weight="bold", color=ACCENT, ha="right")
 
-# progreso
-pbar = fig.add_axes([RX, 0.735, 0.33, 0.012])
+pbar = fig.add_axes([LX, 0.778, 0.88, 0.007])
 pbar.set_xlim(0, 1); pbar.set_ylim(0, 1); pbar.axis("off")
 pbar.add_patch(plt.Rectangle((0, 0), 1, 1, color=GRID, lw=0))
 prog = plt.Rectangle((0, 0), 0, 1, color=ACCENT, lw=0)
 pbar.add_patch(prog)
-pbar.axvline(steps_per_epoch / total_steps, color=SURFACE, lw=2)
+pbar.axvline(steps_per_epoch / total_steps, color=SURFACE, lw=3)
 
-# leyenda (2 columnas)
+# Leyenda: 2 filas x 5 columnas
 for c, name in enumerate(class_names):
-    col, row = c // 5, c % 5
-    x0 = RX + col * 0.165
-    y0 = 0.665 - row * 0.034
-    fig.patches.append(matplotlib.patches.Circle(
-        (x0 + 0.006, y0 + 0.007), 0.0055, transform=fig.transFigure,
-        color=palette[c], figure=fig))
-    fig.text(x0 + 0.02, y0, name, fontsize=11, color=INK)
+    row, col = c // 5, c % 5
+    x0 = LX + col * 0.18
+    y0 = 0.298 - row * 0.03
+    fig.patches.append(matplotlib.patches.Ellipse(
+        (x0 + 0.012, y0 + 0.0045), 0.022, 0.022 * FIG_W / FIG_H,
+        transform=fig.transFigure, color=palette[c], figure=fig))
+    fig.text(x0 + 0.03, y0, name, fontsize=15, color=INK)
 
 def small_chart(rect, title, ylim_, fmt):
     a = fig.add_axes(rect)
@@ -366,25 +368,26 @@ def small_chart(rect, title, ylim_, fmt):
     for s in ["top", "right"]:
         a.spines[s].set_visible(False)
     a.spines["left"].set_color(GRID); a.spines["bottom"].set_color(GRID)
-    a.tick_params(labelsize=8.5, length=0)
-    a.grid(axis="y", color=GRID, lw=0.8)
+    a.tick_params(labelsize=13, length=0, pad=5)
+    a.grid(axis="y", color=GRID, lw=1)
     a.yaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(fmt))
+    a.yaxis.set_major_locator(matplotlib.ticker.MaxNLocator(3))
     a.set_xticks([0, steps_per_epoch, total_steps])
-    a.set_xticklabels(["0", "época 1", "época 2"])
-    a.set_title(title, loc="left", fontsize=10.5, color=INK2, pad=6)
-    line, = a.plot([], [], color=ACCENT, lw=2, solid_capstyle="round")
-    dot, = a.plot([], [], "o", color=ACCENT, ms=6, mec=SURFACE, mew=1.5)
+    a.set_xticklabels(["0", "época 1", "2"])
+    a.set_title(title, loc="left", fontsize=16, color=INK2, pad=10)
+    line, = a.plot([], [], color=ACCENT, lw=3, solid_capstyle="round")
+    dot, = a.plot([], [], "o", color=ACCENT, ms=9, mec=SURFACE, mew=2)
     return a, line, dot
 
 acc_lo = np.floor(snap_acc.min() * 10) / 10
-_, acc_line, acc_dot = small_chart([RX + 0.01, 0.29, 0.32, 0.13],
-                                   "Accuracy en test", (acc_lo, 1.0),
+_, acc_line, acc_dot = small_chart([0.16, 0.085, 0.31, 0.115],
+                                   "Accuracy", (acc_lo, 1.0),
                                    lambda v, _: f"{v:.0%}")
 sil_lo = np.floor(sil_mean.min() * 20) / 20
 sil_hi = np.ceil(sil_mean.max() * 20) / 20
-_, sil_line, sil_dot = small_chart([RX + 0.01, 0.07, 0.32, 0.13],
-                                   "Separación entre clases (silhouette coseno, 512-D)",
-                                   (sil_lo, sil_hi), lambda v, _: f"{v:.2f}")
+_, sil_line, sil_dot = small_chart([0.64, 0.085, 0.31, 0.115],
+                                   "Separación", (sil_lo, sil_hi),
+                                   lambda v, _: f"{v:.1f}")
 
 # curvas densas para dibujar progresivamente
 u_dense = np.linspace(0, K - 1, 600)
@@ -407,7 +410,7 @@ def update(f):
         pts = P[labels == k_]
         med = np.median(pts, axis=0)
         top = np.percentile(pts[:, 1], 80)
-        t.set_position((med[0], top + 0.025 * h))
+        t.set_position((med[0], top + 0.03 * h))
         a = np.clip((s_cls[k_] - sil_floor) / (sil_ceil - sil_floor + 1e-9), 0, 1)
         t.set_alpha(0.15 + 0.85 * a)
 
@@ -415,11 +418,11 @@ def update(f):
     acc = float(acc_spline(u))
     if st < 0.5:
         status_main.set_text("Antes del fine-tuning")
-        status_sub.set_text("ResNet-18 preentrenada en ImageNet")
+        status_sub.set_text("")
     else:
         ep = min(int(st // steps_per_epoch) + 1, EPOCHS)
-        status_main.set_text(f"Época {ep} de {EPOCHS}  ·  paso {int(round(st))}/{total_steps}")
-        status_sub.set_text(f"Accuracy en test: {acc:.1%}")
+        status_main.set_text(f"Época {ep}/{EPOCHS} · paso {int(round(st))}")
+        status_sub.set_text(f"{acc:.1%}")
     prog.set_width(st / total_steps)
 
     m = u_dense <= u
