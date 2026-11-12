@@ -282,10 +282,19 @@ def frame_to_u(f):
     t = np.clip((f - n_hold0) / max(n_move - 1, 1), 0, 1)
     return ease(t) * (K - 1)
 
-all_pos = pos_spline(np.linspace(0, K - 1, 200))
-lo, hi = np.percentile(all_pos.reshape(-1, 2), [0.3, 99.7], axis=0)
-pad = 0.08 * (hi - lo)
-xlim, ylim = (lo[0] - pad[0], hi[0] + pad[0]), (lo[1] - pad[1], hi[1] + pad[1])
+# Encuadre que sigue a los puntos: a medida que los clusters se compactan la
+# cámara se acerca suavemente (misma escala en x e y para no deformar).
+ASPECT = 0.56 * 12.8 / (0.80 * 7.2)   # ancho/alto del panel en pantalla
+centers, half_h = [], []
+for Y in layouts_s:
+    lo, hi = np.percentile(Y, [0.5, 99.5], axis=0)
+    c = (lo + hi) / 2
+    h = max((hi[1] - lo[1]) / 2, (hi[0] - lo[0]) / 2 / ASPECT) * 1.12
+    centers.append(c); half_h.append(h)
+centers = gaussian_filter1d(np.array(centers), sigma=2.0, axis=0, mode="nearest")
+half_h = gaussian_filter1d(np.array(half_h), sigma=2.0, mode="nearest")
+cam_c = CubicSpline(knots, centers, axis=0, bc_type="clamped")
+cam_h = CubicSpline(knots, half_h, bc_type="clamped")
 
 # ----------------------------------------------------------------------------
 # Figura
@@ -310,7 +319,6 @@ plt.rcParams.update({
 fig = plt.figure(figsize=(12.8, 7.2), dpi=150, facecolor=SURFACE)
 ax = fig.add_axes([0.03, 0.05, 0.56, 0.80])
 ax.set_facecolor(SURFACE)
-ax.set_xlim(xlim); ax.set_ylim(ylim)
 ax.set_xticks([]); ax.set_yticks([])
 for s in ax.spines.values():
     s.set_visible(False)
@@ -325,7 +333,7 @@ scat = ax.scatter(layouts[0][:, 0], layouts[0][:, 1], c=point_colors,
 
 halo = [pe.withStroke(linewidth=3.5, foreground=SURFACE)]
 class_texts = [ax.text(0, 0, n, fontsize=11, weight="bold", color=INK,
-                       ha="center", va="center", path_effects=halo)
+                       ha="center", va="bottom", path_effects=halo)
                for n in class_names]
 
 # Columna derecha: estado, leyenda, curvas
@@ -390,12 +398,17 @@ def update(f):
     u = frame_to_u(f)
     P = pos_spline(u)
     scat.set_offsets(P)
+    c, h = cam_c(u), float(cam_h(u))
+    ax.set_xlim(c[0] - h * ASPECT, c[0] + h * ASPECT)
+    ax.set_ylim(c[1] - h, c[1] + h)
 
     s_cls = sil_spline(u)
-    for c, t in enumerate(class_texts):
-        pts = P[labels == c]
-        t.set_position(np.median(pts, axis=0))
-        a = np.clip((s_cls[c] - sil_floor) / (sil_ceil - sil_floor + 1e-9), 0, 1)
+    for k_, t in enumerate(class_texts):
+        pts = P[labels == k_]
+        med = np.median(pts, axis=0)
+        top = np.percentile(pts[:, 1], 80)
+        t.set_position((med[0], top + 0.025 * h))
+        a = np.clip((s_cls[k_] - sil_floor) / (sil_ceil - sil_floor + 1e-9), 0, 1)
         t.set_alpha(0.15 + 0.85 * a)
 
     st = float(step_spline(u))
